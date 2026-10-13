@@ -1,75 +1,81 @@
-
 <script setup>
-import { ref, computed } from 'vue'
-import { RouterLink } from 'vue-router'
+  
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { authService } from '../services/authService'
 
-const form = ref(null)
+const router = useRouter()
 
 const firstName = ref('')
 const lastName = ref('')
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
-
-const showPassword = ref(false)
-const showConfirmPassword = ref(false)
 const acceptTerms = ref(false)
+
 const loading = ref(false)
-const message = ref('')
+const errorMessage = ref('')
+const successMessage = ref('')
 
-const nameRules = [
-  v => !!v?.trim() || 'This field is required',
-  v => v?.trim().length >= 2 ||
-    'Must contain at least 2 characters',
-]
+const handleRegister = async () => {
+  errorMessage.value = ''
+  successMessage.value = ''
 
-const emailRules = [
-  v => !!v?.trim() || 'Email address is required',
-  v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ||
-    'Enter a valid email address',
-]
+  if (!firstName.value.trim() || !lastName.value.trim() ||
+      !email.value.trim() || !password.value) {
+    errorMessage.value = 'Please fill in all required fields.'
+    return
+  }
 
-const passwordRules = [
-  v => !!v || 'Password is required',
-  v => v?.length >= 8 ||
-    'Password must contain at least 8 characters',
-  v => /[A-Z]/.test(v) ||
-    'Include at least one uppercase letter',
-  v => /[0-9]/.test(v) ||
-    'Include at least one number',
-]
+  if (password.value !== confirmPassword.value) {
+    errorMessage.value = 'Passwords do not match.'
+    return
+  }
 
-const confirmPasswordRules = [
-  v => !!v || 'Please confirm your password',
-  v => v === password.value || 'Passwords do not match',
-]
+  if (password.value.length < 8) {
+    errorMessage.value = 'Password must be at least 8 characters.'
+    return
+  }
 
-const canSubmit = computed(() =>
-  firstName.value.trim() &&
-  lastName.value.trim() &&
-  email.value.trim() &&
-  password.value &&
-  confirmPassword.value &&
-  acceptTerms.value
-)
-
-async function handleRegister() {
-  message.value = ''
-
-  const { valid } = await form.value.validate()
-
-  if (!valid || !acceptTerms.value) return
+  if (!acceptTerms.value) {
+    errorMessage.value = 'Please accept the terms to continue.'
+    return
+  }
 
   loading.value = true
 
   try {
-    // Laravel registration endpoint will be connected next.
-    message.value =
-      'Registration form validated! Backend integration comes next.'
+    const response = await authService.register({
+      first_name: firstName.value.trim(),
+      last_name: lastName.value.trim(),
+      email: email.value.trim(),
+      password: password.value,
+      password_confirmation: confirmPassword.value,
+    })
+
+    successMessage.value = response.message || 'Account created successfully!'
+
+    await router.push('/login')
+
+  } catch (error) {
+    if (error.response?.status === 422) {
+      const errors = error.response.data.errors
+
+      errorMessage.value = errors
+        ? Object.values(errors).flat().join(' ')
+        : error.response.data.message || 'Please check your information.'
+    } else if (error.response) {
+      errorMessage.value = 'Registration failed. Please try again.'
+    } else {
+      errorMessage.value = 'Cannot connect to Dealora. Check that Laravel is running.'
+    }
+
+    console.error('Registration error:', error)
   } finally {
     loading.value = false
   }
 }
+
 </script>
 
 <template>
@@ -275,6 +281,15 @@ async function handleRegister() {
               </template>
             </v-checkbox>
 
+            <v-alert
+              v-if="errorMessage"
+              type="error"
+              variant="tonal"
+              class="mb-4"
+>
+              {{ errorMessage }}
+            </v-alert>
+
             <!-- Submit -->
             <v-btn
               type="submit"
@@ -284,7 +299,7 @@ async function handleRegister() {
               rounded="lg"
               elevation="0"
               class="register-button"
-              :disabled="!canSubmit"
+              :disabled="loading"
               :loading="loading"
               append-icon="mdi-arrow-right"
             >

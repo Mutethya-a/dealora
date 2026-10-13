@@ -1,7 +1,11 @@
-
 <script setup>
 import { ref, computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
+import { authService } from '../services/authService'
+import { useAuthStore } from '../stores/auth'
+
+const router = useRouter()
+const authStore = useAuthStore()
 
 const form = ref(null)
 const email = ref('')
@@ -12,18 +16,21 @@ const loading = ref(false)
 const message = ref('')
 
 const emailRules = [
-  v => !!v?.trim() || 'Email address is required',
-  v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ||
+  (v) => !!v?.trim() || 'Email address is required',
+  (v) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ||
     'Please enter a valid email address',
 ]
 
 const passwordRules = [
-  v => !!v || 'Password is required',
+  (v) => !!v || 'Password is required',
 ]
 
-const canSubmit = computed(() =>
-  email.value.trim().length > 0 &&
-  password.value.length > 0
+const canSubmit = computed(
+  () =>
+    email.value.trim().length > 0 &&
+    password.value.length > 0 &&
+    !loading.value,
 )
 
 async function handleLogin() {
@@ -35,13 +42,31 @@ async function handleLogin() {
   loading.value = true
 
   try {
-    // Authentication API integration comes next.
-    message.value =
-      'Your form is ready! Authentication will be connected soon.'
+    const response = await authService.login({
+      email: email.value.trim(),
+      password: password.value,
+    })
+
+    authStore.setSession(response)
+
+    
+    await router.push('/dashboard')
+
+  } catch (error) {
+    if (error.response?.status === 422 ||
+        error.response?.status === 401) {
+      message.value = 'Invalid email or password.'
+    } else if (error.response) {
+      message.value = 'Login failed. Please try again.'
+    } else {
+      message.value =
+        'Cannot connect to Dealora. Check that Laravel is running.'
+    }
   } finally {
     loading.value = false
   }
 }
+
 </script>
 
 <template>
@@ -90,7 +115,7 @@ async function handleLogin() {
 
           <v-alert
             v-if="message"
-            type="info"
+            type="error"
             variant="tonal"
             rounded="lg"
             class="mb-5"
