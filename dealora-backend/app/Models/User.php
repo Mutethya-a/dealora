@@ -37,4 +37,16 @@ class User extends Authenticatable
             $this->first_name . ' ' . $this->last_name
         );
     }
+
+    
+    public function enrollments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Enrollment::class);
+    }
+
+    public function lessonProgress(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LessonProgress::class);
+    }
+
 }
