@@ -1,8 +1,9 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { authService } from '../services/authService'
+import learningService from '../services/learningService'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -18,45 +19,6 @@ const initials = computed(() =>
   firstName.value.charAt(0).toUpperCase()
 )
 
-const learningPaths = [
-  {
-    title: 'Sales Fundamentals',
-    category: 'SALES',
-    description: 'Learn how to connect with customers and close deals confidently.',
-    icon: 'mdi-handshake-outline',
-    color: '#7048D9',
-    background: '#F0EAFE',
-    lessons: 12,
-  },
-  {
-    title: 'Negotiation Skills',
-    category: 'NEGOTIATION',
-    description: 'Master communication, persuasion, and win-win agreements.',
-    icon: 'mdi-forum-outline',
-    color: '#E46A9D',
-    background: '#FDEBF3',
-    lessons: 10,
-  },
-  {
-    title: 'Procurement Essentials',
-    category: 'PROCUREMENT',
-    description: 'Understand sourcing, suppliers, and purchasing processes.',
-    icon: 'mdi-clipboard-check-outline',
-    color: '#D38B38',
-    background: '#FFF2DE',
-    lessons: 9,
-  },
-  {
-    title: 'Importation Basics',
-    category: 'IMPORTATION',
-    description: 'Explore international sourcing, shipping, and importing.',
-    icon: 'mdi-earth',
-    color: '#328D86',
-    background: '#E5F5F2',
-    lessons: 11,
-  },
-]
-
 const navigation = [
   { title: 'Dashboard', icon: 'mdi-view-dashboard-outline', active: true },
   { title: 'My Learning', icon: 'mdi-book-open-page-variant-outline' },
@@ -64,6 +26,25 @@ const navigation = [
   { title: 'Achievements', icon: 'mdi-trophy-outline' },
   { title: 'My Profile', icon: 'mdi-account-circle-outline' },
 ]
+
+const learningPaths = ref([])
+const loadingPaths = ref(false)
+const learningError = ref('')
+
+async function fetchLearningPaths() {
+  loadingPaths.value = true
+  learningError.value = ''
+
+  try {
+    learningPaths.value = await learningService.getLearningPaths()
+  } catch (error) {
+    console.error('Failed to load learning paths:', error)
+    learningError.value =
+      'Unable to load learning paths. Please try again.'
+  } finally {
+    loadingPaths.value = false
+  }
+}
 
 async function handleLogout() {
   if (loggingOut.value) return
@@ -82,6 +63,10 @@ async function handleLogout() {
     await router.push('/login')
   }
 }
+
+onMounted(() => {
+  fetchLearningPaths()
+})
 </script>
 
 <template>
@@ -122,7 +107,9 @@ async function handleLogout() {
               color="#7048D9"
               size="24"
             />
+
             <h4>Keep growing!</h4>
+
             <p>
               Every great deal starts with something new you learn.
             </p>
@@ -177,7 +164,7 @@ async function handleLogout() {
 
             <h1>
               Welcome back,
-              <span>{{ firstName }}!</span> 💜
+              <span>{{ firstName }}!</span>
             </h1>
 
             <p>
@@ -217,6 +204,7 @@ async function handleLogout() {
                 <div class="stat-icon purple">
                   <v-icon icon="mdi-book-open-outline" />
                 </div>
+
                 <div>
                   <h3>0</h3>
                   <p>Courses in progress</p>
@@ -229,6 +217,7 @@ async function handleLogout() {
                 <div class="stat-icon pink">
                   <v-icon icon="mdi-check-circle-outline" />
                 </div>
+
                 <div>
                   <h3>0</h3>
                   <p>Lessons completed</p>
@@ -241,6 +230,7 @@ async function handleLogout() {
                 <div class="stat-icon orange">
                   <v-icon icon="mdi-trophy-outline" />
                 </div>
+
                 <div>
                   <h3>0</h3>
                   <p>Achievements earned</p>
@@ -259,13 +249,48 @@ async function handleLogout() {
                 Discover skills that help you make your next big move.
               </p>
             </div>
-            <span class="section-tag">MADE FOR YOU ✨</span>
+
+            <span class="section-tag">MADE FOR YOU</span>
           </div>
 
-          <v-row>
+          <!-- Loading -->
+          <v-row v-if="loadingPaths">
+            <v-col
+              v-for="n in 4"
+              :key="n"
+              cols="12"
+              md="6"
+              lg="3"
+            >
+              <v-skeleton-loader type="card" />
+            </v-col>
+          </v-row>
+
+          <!-- Error -->
+          <v-alert
+            v-else-if="learningError"
+            type="error"
+            variant="tonal"
+            class="mb-4"
+          >
+            {{ learningError }}
+
+            <template #append>
+              <v-btn
+                variant="text"
+                size="small"
+                @click="fetchLearningPaths"
+              >
+                Retry
+              </v-btn>
+            </template>
+          </v-alert>
+
+          <!-- Learning Paths -->
+          <v-row v-else-if="learningPaths.length">
             <v-col
               v-for="path in learningPaths"
-              :key="path.title"
+              :key="path.id"
               cols="12"
               md="6"
               lg="3"
@@ -274,28 +299,72 @@ async function handleLogout() {
                 <div
                   class="course-icon"
                   :style="{
-                    background: path.background,
-                    color: path.color
+                    background: path.color
+                      ? `${path.color}1A`
+                      : '#F0EAFE',
+                    color: path.color || '#7048D9'
                   }"
                 >
-                  <v-icon :icon="path.icon" size="30" />
+                  <v-icon
+                    :icon="path.icon || 'mdi-book-open-outline'"
+                    size="30"
+                  />
                 </div>
 
                 <div class="course-category">
-                  {{ path.category }}
+                  LEARNING PATH
                 </div>
 
                 <h3>{{ path.title }}</h3>
+
                 <p>{{ path.description }}</p>
+
+                <v-chip
+                  color="deep-purple"
+                  variant="tonal"
+                  size="small"
+                  class="mt-4 align-self-start"
+                >
+                  {{ path.courses?.length || 0 }} courses
+                </v-chip>
+
+                <!-- Clickable Courses -->
+                <div
+                  v-if="path.courses?.length"
+                  class="path-courses"
+                >
+                  <RouterLink
+                    v-for="course in path.courses"
+                    :key="course.id"
+                    :to="`/courses/${course.slug}`"
+                    class="path-course-item course-link"
+                  >
+                    <v-icon
+                      icon="mdi-book-open-outline"
+                      size="17"
+                      color="#7048D9"
+                    />
+
+                    <span>{{ course.title }}</span>
+
+                    <v-icon
+                      icon="mdi-arrow-top-right"
+                      size="16"
+                      class="course-link-arrow"
+                    />
+                  </RouterLink>
+                </div>
 
                 <div class="course-footer">
                   <span>
                     <v-icon
-                      icon="mdi-book-open-outline"
+                      icon="mdi-school-outline"
                       size="16"
                     />
-                    {{ path.lessons }} lessons
+                    {{ path.courses?.length || 0 }}
+                    available courses
                   </span>
+
                   <v-icon
                     icon="mdi-arrow-top-right"
                     color="#7048D9"
@@ -304,17 +373,31 @@ async function handleLogout() {
               </div>
             </v-col>
           </v-row>
+
+          <!-- Empty State -->
+          <v-alert
+            v-else
+            type="info"
+            variant="tonal"
+          >
+            No learning paths are available yet.
+          </v-alert>
         </section>
 
         <!-- AI Coach -->
         <section class="coach-section">
           <div class="coach-icon">
-            <v-icon icon="mdi-robot-happy-outline" size="38" />
+            <v-icon
+              icon="mdi-robot-happy-outline"
+              size="38"
+            />
           </div>
 
           <div class="coach-copy">
             <span>COMING SOON</span>
-            <h2>Meet your AI Deal Coach ✨</h2>
+
+            <h2>Meet your AI Deal Coach</h2>
+
             <p>
               Practice sales conversations, sharpen negotiation
               skills, and build confidence through realistic
@@ -333,7 +416,8 @@ async function handleLogout() {
         </section>
 
         <footer class="dashboard-footer">
-          Learn the skills. <strong>Make the deal.</strong> 💜
+          Learn the skills.
+          <strong>Make the deal.</strong>
         </footer>
       </div>
     </v-main>
@@ -557,6 +641,13 @@ async function handleLogout() {
   justify-content: center;
 }
 
+.stat-icon.purple,
+.stat-icon.pink,
+.stat-icon.orange {
+  width: 55px;
+  height: 55px;
+}
+
 .stat-icon.purple {
   background: #F0EAFE;
   color: #7048D9;
@@ -634,6 +725,45 @@ async function handleLogout() {
   color: #827B98;
   line-height: 1.7;
   flex: 1;
+}
+
+.path-courses {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.path-course-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #625A76;
+}
+
+.path-course-item .v-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.course-link {
+  text-decoration: none;
+  border-radius: 9px;
+  padding: 8px;
+  margin: 0 -8px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.course-link:hover,
+.course-link:focus-visible {
+  background: #F5F0FF;
+  color: #7048D9;
+}
+
+.course-link-arrow {
+  margin-left: auto;
 }
 
 .course-footer {
