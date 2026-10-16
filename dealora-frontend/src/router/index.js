@@ -6,6 +6,7 @@ import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import { useAuthStore } from '../stores/auth'
 import CourseDetailsView from '../views/CourseDetailsView.vue'
+import LessonView from '../views/LessonView.vue'
 
 const routes = [
   {
@@ -35,6 +36,12 @@ const routes = [
   path: '/courses/:slug',
   name: 'course-details',
   component: CourseDetailsView,
+  meta: { requiresAuth: true },
+  },
+  {
+  path: '/courses/:courseSlug/lessons/:lessonSlug',
+  name: 'lesson',
+  component: LessonView,
   meta: { requiresAuth: true },
   },
 ]

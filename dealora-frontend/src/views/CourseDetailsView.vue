@@ -433,7 +433,13 @@ watch(
               cols="12"
               md="6"
             >
-              <div class="lesson-card">
+              <div
+                class="lesson-card"
+                :class="{ 'lesson-card-clickable': enrolled || lesson.is_preview }"
+                @click="
+                (enrolled || lesson.is_preview) &&
+                router.push(`/courses/${course.slug}/lessons/${lesson.slug}`)"
+              >
                 <div class="lesson-number">
                   {{ String(index + 1).padStart(2, '0') }}
                 </div>
@@ -1023,5 +1029,14 @@ watch(
     flex-direction: column;
     text-align: center;
   }
+}
+
+.lesson-card-clickable {
+  cursor: pointer;
+}
+
+.lesson-card-clickable:hover {
+  border-color: #7048d9;
+  background: #fbf8ff;
 }
 </style>

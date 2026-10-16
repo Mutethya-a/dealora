@@ -37,6 +37,19 @@ const learningService = {
 
     return response.data
   },
+
+  async getLesson(courseSlug, lessonSlug, token) {
+  const response = await api.get(
+    `/courses/${encodeURIComponent(courseSlug)}/lessons/${encodeURIComponent(lessonSlug)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  )
+
+  return response.data.data
+  },
 }
 
 export default learningService

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\LearningPathController;
 use App\Http\Controllers\Api\CourseController;
 use App\Http\Controllers\Api\EnrollmentController;
+use App\Http\Controllers\Api\LessonController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -23,6 +24,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/courses/{slug}/enrollment', [
         EnrollmentController::class,
         'status'
+    ]);
+
+    Route::get(
+    '/courses/{courseSlug}/lessons/{lessonSlug}',
+    [LessonController::class, 'show'
     ]);
 });
 
