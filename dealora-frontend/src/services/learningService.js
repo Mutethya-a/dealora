@@ -50,6 +50,35 @@ const learningService = {
 
   return response.data.data
   },
+
+  
+async completeLesson(courseSlug, lessonSlug, token) {
+  const response = await api.post(
+    `/courses/${encodeURIComponent(courseSlug)}/lessons/${encodeURIComponent(lessonSlug)}/complete`,
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  )
+
+  return response.data
+},
+
+async getLessonProgress(courseSlug, lessonSlug, token) {
+  const response = await api.get(
+    `/courses/${encodeURIComponent(courseSlug)}/lessons/${encodeURIComponent(lessonSlug)}/progress`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  )
+
+  return response.data
+},
+
 }
 
 export default learningService

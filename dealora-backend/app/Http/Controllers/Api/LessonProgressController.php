@@ -15,7 +15,9 @@ class LessonProgressController extends Controller
         string $courseSlug,
         string $lessonSlug
     ): JsonResponse {
-        
+        $user = $request->user();
+
+        // Find the published course
         $course = Course::query()
             ->where('slug', $courseSlug)
             ->where('is_published', true)
@@ -24,58 +26,56 @@ class LessonProgressController extends Controller
             })
             ->firstOrFail();
 
-        
+        // Find the lesson belonging to this course
         $lesson = $course->lessons()
             ->where('slug', $lessonSlug)
             ->where('is_published', true)
             ->firstOrFail();
 
-        
-        $enrollment = $course->enrollments()
-            ->where('user_id', $request->user()->id)
-            ->first();
+        // Only enrolled learners can complete lessons
+        $isEnrolled = $course->enrollments()
+            ->where('user_id', $user->id)
+            ->exists();
 
-        if (!$enrollment) {
+        if (!$isEnrolled) {
             return response()->json([
                 'success' => false,
                 'message' => 'You must enroll before completing lessons.',
             ], 403);
         }
 
-       
-        $progress = LessonProgress::firstOrCreate(
-            [
-                'enrollment_id' => $enrollment->id,
-                'lesson_id' => $lesson->id,
-            ],
-            [
-                'is_completed' => true,
-                'completed_at' => now(),
-            ]
-        );
+        // Save completion using your existing table structure
+        $progress = LessonProgress::firstOrNew([
+            'user_id' => $user->id,
+            'lesson_id' => $lesson->id,
+        ]);
 
-        
-        if (!$progress->is_completed) {
-            $progress->update([
-                'is_completed' => true,
-                'completed_at' => now(),
-            ]);
+        $progress->status = 'completed';
+
+        if (!$progress->completed_at) {
+            $progress->completed_at = now();
         }
 
-        
+        $progress->save();
+
+        // Count published lessons in this course
         $totalLessons = $course->lessons()
             ->where('is_published', true)
             ->count();
 
+        // Count lessons completed by this learner
         $completedLessons = LessonProgress::query()
-            ->where('enrollment_id', $enrollment->id)
-            ->where('is_completed', true)
-            ->whereHas('lesson', function ($query) use ($course) {
-                $query->where('course_id', $course->id)
-                    ->where('is_published', true);
-            })
+            ->where('user_id', $user->id)
+            ->where('status', 'completed')
+            ->whereIn(
+                'lesson_id',
+                $course->lessons()
+                    ->where('is_published', true)
+                    ->select('id')
+            )
             ->count();
 
+        // Calculate course progress
         $percentage = $totalLessons > 0
             ? round(($completedLessons / $totalLessons) * 100)
             : 0;

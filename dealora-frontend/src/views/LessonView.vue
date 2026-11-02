@@ -14,6 +14,11 @@ const loading = ref(true)
 const error = ref('')
 const sidebarOpen = ref(true)
 
+const completing = ref(false)
+const completed = ref(false)
+const completionError = ref('')
+const progressPercentage = ref(0)
+
 const lessonContent = computed(() => lesson.value?.content || '')
 
 const formattedContent = computed(() => {
@@ -31,6 +36,10 @@ async function fetchLesson() {
   loading.value = true
   error.value = ''
   lesson.value = null
+
+  completed.value = false
+  completionError.value = ''
+  progressPercentage.value = 0
 
   try {
     const courseSlug = route.params.courseSlug
@@ -62,6 +71,35 @@ async function fetchLesson() {
 function backToCourse() {
   router.push(`/courses/${route.params.courseSlug}`)
 }
+
+
+async function markLessonComplete() {
+  if (!lesson.value || completing.value || completed.value) return
+
+  completing.value = true
+  completionError.value = ''
+
+  try {
+    const response = await learningService.completeLesson(
+      route.params.courseSlug,
+      route.params.lessonSlug,
+      authStore.token
+    )
+
+    completed.value = true
+    progressPercentage.value =
+      response.data.progress_percentage ?? 0
+  } catch (err) {
+    console.error('Failed to complete lesson:', err)
+
+    completionError.value =
+      err.response?.data?.message ||
+      'Unable to save your progress. Please try again.'
+  } finally {
+    completing.value = false
+  }
+}
+
 
 watch(
   () => [route.params.courseSlug, route.params.lessonSlug],
@@ -199,6 +237,43 @@ watch(
           </div>
         </div>
 
+        
+<v-alert
+  v-if="completionError"
+  type="error"
+  variant="tonal"
+  class="mb-4"
+>
+  {{ completionError }}
+</v-alert>
+
+<div v-if="completed" class="progress-card">
+  <div class="progress-heading">
+    <div>
+      <h3>
+        <v-icon icon="mdi-party-popper" color="#7048D9" />
+        Amazing work!
+      </h3>
+      <p>You've completed this lesson.</p>
+    </div>
+
+    <strong>{{ progressPercentage }}%</strong>
+  </div>
+
+  <v-progress-linear
+    :model-value="progressPercentage"
+    color="#7048D9"
+    bg-color="#E8DFF7"
+    height="10"
+    rounded
+  />
+
+  <p class="progress-caption">
+    Overall course progress
+  </p>
+</div>
+
+
         <div class="lesson-actions">
           <v-btn
             variant="outlined"
@@ -210,14 +285,22 @@ watch(
             Course Overview
           </v-btn>
 
-          <v-btn
-            color="#7048D9"
-            rounded="lg"
-            prepend-icon="mdi-check-circle-outline"
-            disabled
-          >
-            Mark Complete — Coming Next
-          </v-btn>
+          
+<v-btn
+  color="#7048D9"
+  rounded="lg"
+  :prepend-icon="
+    completed
+      ? 'mdi-check-circle'
+      : 'mdi-check-circle-outline'
+  "
+  :loading="completing"
+  :disabled="completed"
+  @click="markLessonComplete"
+>
+  {{ completed ? 'Lesson Completed!' : 'Mark as Complete' }}
+</v-btn>
+
         </div>
       </main>
     </div>
@@ -531,5 +614,42 @@ watch(
   .lesson-reading-card {
     padding: 27px 22px;
   }
+}
+
+.progress-card {
+  margin-top: 25px;
+  padding: 25px;
+  background: #f3edff;
+  border: 1px solid #e6d9fb;
+  border-radius: 18px;
+}
+
+.progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.progress-heading h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 7px;
+}
+
+.progress-heading p,
+.progress-caption {
+  color: #827b98;
+  font-size: 0.82rem;
+}
+
+.progress-heading strong {
+  color: #7048d9;
+  font-size: 1.5rem;
+}
+
+.progress-caption {
+  margin-top: 12px;
 }
 </style>
