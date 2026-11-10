@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\CourseController;
 use App\Http\Controllers\Api\EnrollmentController;
 use App\Http\Controllers\Api\LessonController;
 use App\Http\Controllers\Api\LessonProgressController;
+use App\Http\Controllers\Api\CourseProgressController;
+use App\Http\Controllers\Api\MyLearningController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -22,18 +24,32 @@ Route::middleware('auth:sanctum')->group(function () {
         'store'
     ]);
 
+    Route::get('/my-learning', [MyLearningController::class, 'index']);
+
+    Route::get(
+    '/courses/{slug}/progress',
+    [CourseProgressController::class, 'show']);
+    Route::get(
+        '/courses/{courseSlug}/lessons/{lessonSlug}/progress',
+        [LessonProgressController::class, 'show']
+    );
+
     Route::get('/courses/{slug}/enrollment', [
         EnrollmentController::class,
         'status'
     ]);
 
     Route::get(
-    '/courses/{courseSlug}/lessons/{lessonSlug}',
-    [LessonController::class, 'show'
-    ]);
+        '/courses/{courseSlug}/lessons/{lessonSlug}',
+        [
+            LessonController::class,
+            'show'
+        ]
+    );
     Route::post(
-    '/courses/{courseSlug}/lessons/{lessonSlug}/complete',
-    [LessonProgressController::class, 'complete']);
+        '/courses/{courseSlug}/lessons/{lessonSlug}/complete',
+        [LessonProgressController::class, 'complete']
+    );
 });
 
 Route::get('/learning-paths', [

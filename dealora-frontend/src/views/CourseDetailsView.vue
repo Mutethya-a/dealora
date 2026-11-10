@@ -1,3 +1,4 @@
+
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -17,15 +18,18 @@ const enrolling = ref(false)
 const checkingEnrollment = ref(false)
 const enrollmentError = ref('')
 
-const lessons = computed(() => {
-  return [...(course.value?.lessons || [])].sort(
+const courseProgress = ref(null)
+const loadingProgress = ref(false)
+const progressError = ref('')
+
+const lessons = computed(() =>
+  [...(course.value?.lessons || [])].sort(
     (a, b) => a.position - b.position
   )
-})
+)
 
 const totalDuration = computed(() => {
   const minutes = course.value?.duration_minutes || 0
-
   if (minutes < 60) return `${minutes} min`
 
   const hours = Math.floor(minutes / 60)
@@ -36,29 +40,90 @@ const totalDuration = computed(() => {
     : `${hours}h`
 })
 
-const learningPathName = computed(() => {
-  return course.value?.learning_path?.title || 'Learning Path'
-})
+const learningPathName = computed(
+  () => course.value?.learning_path?.title || 'Learning Path'
+)
 
-const learningPathIcon = computed(() => {
-  return course.value?.learning_path?.icon || 'mdi-school-outline'
-})
+const learningPathIcon = computed(
+  () => course.value?.learning_path?.icon || 'mdi-school-outline'
+)
+
+const completedLessonIds = computed(
+  () => courseProgress.value?.completed_lesson_ids || []
+)
+
+function isLessonCompleted(lessonId) {
+  return completedLessonIds.value.includes(lessonId)
+}
+
+function openLesson(lesson) {
+  if (!course.value || !(enrolled.value || lesson.is_preview)) {
+    return
+  }
+
+  router.push({
+    name: 'lesson',
+    params: {
+      courseSlug: course.value.slug,
+      lessonSlug: lesson.slug,
+    },
+  })
+}
+
+function continueLearning() {
+  if (!course.value || !courseProgress.value) return
+
+  const nextLesson = courseProgress.value.next_lesson
+
+  if (nextLesson) {
+    router.push({
+      name: 'lesson',
+      params: {
+        courseSlug: course.value.slug,
+        lessonSlug: nextLesson.slug,
+      },
+    })
+  }
+}
+
+async function fetchCourseProgress(slug) {
+  if (!authStore.token) return
+
+  loadingProgress.value = true
+  progressError.value = ''
+
+  try {
+    courseProgress.value = await learningService.getCourseProgress(
+      slug,
+      authStore.token
+    )
+  } catch (err) {
+    console.error('Unable to load course progress:', err)
+    courseProgress.value = null
+    progressError.value = 'Unable to load your course progress.'
+  } finally {
+    loadingProgress.value = false
+  }
+}
 
 async function checkEnrollment(slug) {
   enrolled.value = false
   enrollmentError.value = ''
-
-  if (!authStore.token) return
-
   checkingEnrollment.value = true
 
   try {
+    if (!authStore.token) return
+
     const response = await learningService.getEnrollmentStatus(
       slug,
       authStore.token
     )
 
     enrolled.value = response.enrolled === true
+
+    if (enrolled.value) {
+      await fetchCourseProgress(slug)
+    }
   } catch (err) {
     console.error('Enrollment status error:', err)
     enrollmentError.value =
@@ -76,8 +141,10 @@ async function fetchCourse(slug) {
   loading.value = true
   error.value = ''
   enrollmentError.value = ''
+  progressError.value = ''
   enrolled.value = false
   course.value = null
+  courseProgress.value = null
 
   try {
     const result = await learningService.getCourse(slug)
@@ -121,9 +188,9 @@ async function handleEnrollment() {
     )
 
     enrolled.value = true
+    await fetchCourseProgress(course.value.slug)
   } catch (err) {
     console.error('Enrollment failed:', err)
-
     enrollmentError.value =
       err.response?.data?.message ||
       'Unable to enroll in this course. Please try again.'
@@ -135,9 +202,7 @@ async function handleEnrollment() {
 watch(
   () => route.params.slug,
   (slug) => {
-    if (slug) {
-      fetchCourse(slug)
-    }
+    if (slug) fetchCourse(slug)
   },
   { immediate: true }
 )
@@ -145,7 +210,6 @@ watch(
 
 <template>
   <div class="course-page">
-    <!-- Navigation -->
     <header class="course-header">
       <RouterLink to="/" class="brand">
         dealora<span>.</span>
@@ -163,28 +227,23 @@ watch(
     </header>
 
     <main class="course-container">
-      <!-- Loading -->
       <div v-if="loading" class="loading-state">
         <v-progress-circular
           indeterminate
           color="#7048D9"
           size="52"
         />
-
         <p>Getting your course ready...</p>
       </div>
 
-      <!-- Error -->
       <div v-else-if="error" class="error-state">
         <v-icon
           icon="mdi-alert-circle-outline"
           size="65"
           color="#E879A7"
         />
-
         <h2>Oops! Something went wrong.</h2>
         <p>{{ error }}</p>
-
         <v-btn
           color="#7048D9"
           rounded="lg"
@@ -195,22 +254,15 @@ watch(
       </div>
 
       <template v-else-if="course">
-        <!-- Course Hero -->
         <section class="course-hero">
           <div class="hero-content">
             <div class="hero-eyebrow">
-              <v-icon
-                :icon="learningPathIcon"
-                size="18"
-              />
+              <v-icon :icon="learningPathIcon" size="18" />
               {{ learningPathName }}
             </div>
 
             <h1>{{ course.title }}</h1>
-
-            <p class="hero-description">
-              {{ course.description }}
-            </p>
+            <p class="hero-description">{{ course.description }}</p>
 
             <div class="hero-meta">
               <span>
@@ -233,17 +285,12 @@ watch(
 
           <div class="hero-art">
             <div class="hero-art-circle">
-              <v-icon
-                :icon="learningPathIcon"
-                size="85"
-              />
+              <v-icon :icon="learningPathIcon" size="85" />
             </div>
           </div>
         </section>
 
-        <!-- Course Information -->
         <div class="details-grid">
-          <!-- Overview -->
           <section class="overview-card">
             <div class="section-eyebrow">
               GET TO KNOW YOUR COURSE
@@ -262,10 +309,7 @@ watch(
 
             <h3>What you'll explore</h3>
 
-            <div
-              v-if="lessons.length"
-              class="overview-topics"
-            >
+            <div v-if="lessons.length" class="overview-topics">
               <div
                 v-for="lesson in lessons.slice(0, 4)"
                 :key="lesson.id"
@@ -276,7 +320,6 @@ watch(
                   color="#7048D9"
                   size="21"
                 />
-
                 <span>{{ lesson.title }}</span>
               </div>
             </div>
@@ -286,20 +329,21 @@ watch(
             </p>
           </section>
 
-          <!-- Enrollment Card -->
           <aside class="summary-card">
             <div class="summary-icon">
-              <v-icon
-                icon="mdi-book-education-outline"
-                size="35"
-              />
+              <v-icon icon="mdi-book-education-outline" size="35" />
             </div>
 
-            <h2>Ready to get started?</h2>
+            <h2>
+              {{ enrolled ? 'Your Learning Journey' : 'Ready to get started?' }}
+            </h2>
 
             <p class="summary-description">
-              Take the next step in your learning journey.
-              Build skills that help you make the deal.
+              {{
+                enrolled
+                  ? 'Keep building your skills, one lesson at a time.'
+                  : 'Take the next step in your learning journey. Build skills that help you make the deal.'
+              }}
             </p>
 
             <div class="summary-divider"></div>
@@ -309,7 +353,6 @@ watch(
                 <v-icon icon="mdi-signal" size="18" />
                 Level
               </span>
-
               <strong>{{ course.level || 'Beginner' }}</strong>
             </div>
 
@@ -318,7 +361,6 @@ watch(
                 <v-icon icon="mdi-clock-outline" size="18" />
                 Duration
               </span>
-
               <strong>{{ totalDuration }}</strong>
             </div>
 
@@ -327,7 +369,6 @@ watch(
                 <v-icon icon="mdi-play-circle-outline" size="18" />
                 Lessons
               </span>
-
               <strong>{{ lessons.length }}</strong>
             </div>
 
@@ -336,7 +377,6 @@ watch(
                 <v-icon icon="mdi-tag-outline" size="18" />
                 Learning path
               </span>
-
               <strong>{{ learningPathName }}</strong>
             </div>
 
@@ -372,35 +412,123 @@ watch(
               class="enroll-button"
               prepend-icon="mdi-school-outline"
               :loading="enrolling"
+              :disabled="!!enrollmentError"
               @click="handleEnrollment"
             >
               Enroll in Course
             </v-btn>
 
-            <v-btn
-              v-else
-              block
-              color="#7048D9"
-              size="large"
-              rounded="lg"
-              class="enroll-button"
-              prepend-icon="mdi-check-circle-outline"
-              disabled
-            >
-              Enrolled — Lessons Coming Next
-            </v-btn>
+            <template v-else>
+              <div
+                v-if="loadingProgress"
+                class="progress-loading"
+              >
+                <v-progress-circular
+                  indeterminate
+                  size="25"
+                  color="#7048D9"
+                />
+                <span>Loading your progress...</span>
+              </div>
+
+              <div
+                v-else-if="courseProgress"
+                class="course-progress-box"
+              >
+                <div class="course-progress-header">
+                  <div>
+                    <h3>Your Progress</h3>
+                    <p>
+                      {{ courseProgress.completed_lessons }}
+                      of {{ courseProgress.total_lessons }}
+                      lessons completed
+                    </p>
+                  </div>
+
+                  <strong>
+                    {{ courseProgress.progress_percentage }}%
+                  </strong>
+                </div>
+
+                <v-progress-linear
+                  :model-value="courseProgress.progress_percentage"
+                  color="#7048D9"
+                  bg-color="#E8DFF7"
+                  height="10"
+                  rounded
+                />
+              </div>
+
+              <v-alert
+                v-if="progressError"
+                type="warning"
+                variant="tonal"
+                density="comfortable"
+                class="mt-4"
+              >
+                {{ progressError }}
+
+                <template #append>
+                  <v-btn
+                    size="small"
+                    variant="text"
+                    @click="fetchCourseProgress(course.slug)"
+                  >
+                    Retry
+                  </v-btn>
+                </template>
+              </v-alert>
+
+              <v-btn
+                v-if="courseProgress?.next_lesson"
+                block
+                color="#7048D9"
+                size="large"
+                rounded="lg"
+                class="enroll-button"
+                prepend-icon="mdi-play-circle-outline"
+                @click="continueLearning"
+              >
+                Continue Learning
+              </v-btn>
+
+              <v-btn
+                v-else-if="courseProgress?.is_course_completed"
+                block
+                color="#7048D9"
+                size="large"
+                rounded="lg"
+                class="enroll-button"
+                prepend-icon="mdi-check-circle-outline"
+                disabled
+              >
+                Course Completed!
+              </v-btn>
+
+              <v-btn
+                v-else
+                block
+                color="#7048D9"
+                size="large"
+                rounded="lg"
+                class="enroll-button"
+                disabled
+              >
+                {{
+                  loadingProgress
+                    ? 'Loading Progress...'
+                    : 'Progress Unavailable'
+                }}
+              </v-btn>
+            </template>
 
             <p class="summary-footnote">
-              <v-icon
-                icon="mdi-heart-outline"
-                size="15"
-              />
+              <v-icon icon="mdi-heart-outline" size="15" />
               Learn at your own pace
             </p>
           </aside>
         </div>
 
-        <!-- Curriculum -->
         <section class="curriculum-section">
           <div class="curriculum-heading">
             <div>
@@ -409,10 +537,7 @@ watch(
               </div>
 
               <h2>Course Curriculum</h2>
-
-              <p>
-                Explore the lessons that will guide your learning.
-              </p>
+              <p>Explore the lessons that will guide your learning.</p>
             </div>
 
             <v-chip
@@ -425,7 +550,6 @@ watch(
             </v-chip>
           </div>
 
-          <!-- Lesson Cards -->
           <v-row v-if="lessons.length">
             <v-col
               v-for="(lesson, index) in lessons"
@@ -435,10 +559,14 @@ watch(
             >
               <div
                 class="lesson-card"
-                :class="{ 'lesson-card-clickable': enrolled || lesson.is_preview }"
-                @click="
-                (enrolled || lesson.is_preview) &&
-                router.push(`/courses/${course.slug}/lessons/${lesson.slug}`)"
+                :class="{
+                  'lesson-card-clickable': enrolled || lesson.is_preview
+                }"
+                :role="enrolled || lesson.is_preview ? 'button' : undefined"
+                :tabindex="enrolled || lesson.is_preview ? 0 : undefined"
+                @click="openLesson(lesson)"
+                @keydown.enter="openLesson(lesson)"
+                @keydown.space.prevent="openLesson(lesson)"
               >
                 <div class="lesson-number">
                   {{ String(index + 1).padStart(2, '0') }}
@@ -453,11 +581,7 @@ watch(
 
                   <div class="lesson-meta">
                     <span>
-                      <v-icon
-                        icon="mdi-clock-outline"
-                        size="16"
-                      />
-
+                      <v-icon icon="mdi-clock-outline" size="16" />
                       {{ lesson.duration_minutes || 0 }} min
                     </span>
 
@@ -469,25 +593,39 @@ watch(
                     >
                       Preview
                     </v-chip>
+
+                    <v-chip
+                      v-if="isLessonCompleted(lesson.id)"
+                      size="x-small"
+                      color="success"
+                      variant="tonal"
+                    >
+                      Completed
+                    </v-chip>
                   </div>
                 </div>
 
                 <div class="lesson-status">
                   <v-icon
                     :icon="
-                      enrolled
-                        ? 'mdi-book-open-outline'
-                        : 'mdi-lock-outline'
+                      isLessonCompleted(lesson.id)
+                        ? 'mdi-check-circle'
+                        : enrolled || lesson.is_preview
+                          ? 'mdi-book-open-outline'
+                          : 'mdi-lock-outline'
                     "
-                    size="21"
-                    color="#9B91B0"
+                    size="23"
+                    :color="
+                      isLessonCompleted(lesson.id)
+                        ? '#7048D9'
+                        : '#9B91B0'
+                    "
                   />
                 </div>
               </div>
             </v-col>
           </v-row>
 
-          <!-- Empty Curriculum -->
           <div v-else class="empty-lessons">
             <v-icon
               icon="mdi-bookshelf"
@@ -496,7 +634,6 @@ watch(
             />
 
             <h3>Lessons are coming soon</h3>
-
             <p>
               We're preparing something great for this course.
               Check back soon!
@@ -504,7 +641,6 @@ watch(
           </div>
         </section>
 
-        <!-- Encouragement -->
         <section class="encouragement-banner">
           <v-icon
             icon="mdi-star-four-points"
@@ -514,7 +650,6 @@ watch(
 
           <div>
             <h3>Every expert was once a beginner.</h3>
-
             <p>
               One lesson at a time, you're building skills
               that can open new doors.
@@ -525,7 +660,9 @@ watch(
     </main>
 
     <footer class="course-footer">
-      <span>dealora<span class="footer-dot">.</span></span>
+      <span>
+        dealora<span class="footer-dot">.</span>
+      </span>
 
       <p>
         Learn the skills.
@@ -662,7 +799,6 @@ watch(
 
 .hero-art {
   flex-shrink: 0;
-  position: relative;
 }
 
 .hero-art-circle {
@@ -674,7 +810,6 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
   transform: rotate(-10deg);
 }
 
@@ -813,6 +948,48 @@ watch(
   margin-top: 17px;
 }
 
+.course-progress-box {
+  background: #f5f0ff;
+  border: 1px solid #e6d9fb;
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 25px;
+}
+
+.course-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.course-progress-header h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.course-progress-header p {
+  font-size: 0.78rem;
+  color: #827b98;
+  margin-top: 5px;
+}
+
+.course-progress-header strong {
+  color: #7048d9;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.progress-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 25px;
+  color: #827b98;
+  font-size: 0.85rem;
+}
+
 .curriculum-section {
   margin-top: 55px;
 }
@@ -849,6 +1026,17 @@ watch(
   transform: translateY(-3px);
   border-color: #d8c8f6;
   box-shadow: 0 12px 30px rgba(67, 42, 109, 0.06);
+}
+
+.lesson-card-clickable {
+  cursor: pointer;
+}
+
+.lesson-card-clickable:hover,
+.lesson-card-clickable:focus-visible {
+  border-color: #7048d9;
+  background: #fbf8ff;
+  outline: none;
 }
 
 .lesson-number {
@@ -1029,14 +1217,5 @@ watch(
     flex-direction: column;
     text-align: center;
   }
-}
-
-.lesson-card-clickable {
-  cursor: pointer;
-}
-
-.lesson-card-clickable:hover {
-  border-color: #7048d9;
-  background: #fbf8ff;
 }
 </style>

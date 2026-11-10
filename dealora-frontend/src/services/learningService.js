@@ -79,6 +79,29 @@ async getLessonProgress(courseSlug, lessonSlug, token) {
   return response.data
 },
 
+async getMyLearning(token) {
+  const response = await api.get('/my-learning', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  return response.data.data
+},
+
+async getCourseProgress(slug, token) {
+  const response = await api.get(
+    `/courses/${encodeURIComponent(slug)}/progress`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  )
+
+  return response.data.data
+},
+
 }
 
 export default learningService

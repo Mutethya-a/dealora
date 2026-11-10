@@ -92,4 +92,73 @@ class LessonProgressController extends Controller
             ],
         ]);
     }
+
+
+    public function show(
+        Request $request,
+        string $courseSlug,
+        string $lessonSlug
+    ): JsonResponse {
+        $user = $request->user();
+
+        $course = Course::query()
+            ->where('slug', $courseSlug)
+            ->where('is_published', true)
+            ->whereHas('learningPath', function ($query) {
+                $query->where('is_active', true);
+            })
+            ->firstOrFail();
+
+        $lesson = $course->lessons()
+            ->where('slug', $lessonSlug)
+            ->where('is_published', true)
+            ->firstOrFail();
+
+        $isEnrolled = $course->enrollments()
+            ->where('user_id', $user->id)
+            ->exists();
+
+        if (!$isEnrolled) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You must enroll to view lesson progress.',
+            ], 403);
+        }
+
+        $progress = LessonProgress::query()
+            ->where('user_id', $user->id)
+            ->where('lesson_id', $lesson->id)
+            ->first();
+
+        $totalLessons = $course->lessons()
+            ->where('is_published', true)
+            ->count();
+
+        $completedLessons = LessonProgress::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'completed')
+            ->whereIn(
+                'lesson_id',
+                $course->lessons()
+                    ->where('is_published', true)
+                    ->select('id')
+            )
+            ->count();
+
+        $percentage = $totalLessons > 0
+            ? round(($completedLessons / $totalLessons) * 100)
+            : 0;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'lesson_id' => $lesson->id,
+                'is_completed' => $progress?->status === 'completed',
+                'completed_at' => $progress?->completed_at,
+                'completed_lessons' => $completedLessons,
+                'total_lessons' => $totalLessons,
+                'progress_percentage' => $percentage,
+            ],
+        ]);
+    }
 }

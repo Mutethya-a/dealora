@@ -32,19 +32,19 @@ const formattedContent = computed(() => {
     .filter(Boolean)
 })
 
+
 async function fetchLesson() {
   loading.value = true
   error.value = ''
   lesson.value = null
-
   completed.value = false
   completionError.value = ''
   progressPercentage.value = 0
 
-  try {
-    const courseSlug = route.params.courseSlug
-    const lessonSlug = route.params.lessonSlug
+  const courseSlug = route.params.courseSlug
+  const lessonSlug = route.params.lessonSlug
 
+  try {
     const response = await learningService.getLesson(
       courseSlug,
       lessonSlug,
@@ -53,20 +53,49 @@ async function fetchLesson() {
 
     lesson.value = response
     course.value = response.course
+
+    // Retrieve saved progress from Laravel
+    try {
+      const progressResponse =
+        await learningService.getLessonProgress(
+          courseSlug,
+          lessonSlug,
+          authStore.token
+        )
+
+      completed.value =
+        progressResponse.data.is_completed === true
+
+      progressPercentage.value =
+        progressResponse.data.progress_percentage ?? 0
+    } catch (progressError) {
+      if (progressError.response?.status !== 403) {
+        console.error(
+          'Failed to retrieve lesson progress:',
+          progressError
+        )
+
+        completionError.value =
+          'Unable to retrieve your saved progress.'
+      }
+    }
   } catch (err) {
     console.error('Failed to load lesson:', err)
 
     if (err.response?.status === 403) {
-      error.value = 'You need to enroll in this course to access this lesson.'
+      error.value =
+        'You need to enroll in this course to access this lesson.'
     } else if (err.response?.status === 404) {
       error.value = 'This lesson could not be found.'
     } else {
-      error.value = 'Unable to load this lesson. Please try again.'
+      error.value =
+        'Unable to load this lesson. Please try again.'
     }
   } finally {
     loading.value = false
   }
 }
+
 
 function backToCourse() {
   router.push(`/courses/${route.params.courseSlug}`)

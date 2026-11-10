@@ -7,6 +7,7 @@ import RegisterView from '../views/RegisterView.vue'
 import { useAuthStore } from '../stores/auth'
 import CourseDetailsView from '../views/CourseDetailsView.vue'
 import LessonView from '../views/LessonView.vue'
+import MyLearningView from '../views/MyLearningView.vue'
 
 const routes = [
   {
@@ -42,6 +43,12 @@ const routes = [
   path: '/courses/:courseSlug/lessons/:lessonSlug',
   name: 'lesson',
   component: LessonView,
+  meta: { requiresAuth: true },
+  },
+  {
+  path: '/my-learning',
+  name: 'my-learning',
+  component: MyLearningView,
   meta: { requiresAuth: true },
   },
 ]
